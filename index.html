@@ -346,31 +346,23 @@
         </div>
     </div>
 
-<script>
+    <script>
         const KEY = 'star_jar_v6_final';
         
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         let currentAmbience = null;
         let sfxLoop = null; 
-        let noiseGain = null; // 摩擦声增益
+        let noiseGain = null; 
 
         function tryInitAudio() { if (audioCtx.state === 'suspended') audioCtx.resume(); initFrictionNoise(); }
 
-        // --- 1. 摩擦声引擎 (Bandpass 800Hz - 清脆沙沙声) ---
+        // --- 1. 摩擦声引擎 ---
         function initFrictionNoise() {
             if(noiseGain) return;
             const bufferSize = audioCtx.sampleRate * 2;
             const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
             const data = buffer.getChannelData(0);
-            let b0=0,b1=0,b2=0,b3=0,b4=0,b5=0,b6=0;
-            for (let i = 0; i < bufferSize; i++) {
-                const white = Math.random() * 2 - 1;
-                b0 = 0.99886 * b0 + white * 0.0555179; b1 = 0.99332 * b1 + white * 0.0750759;
-                b2 = 0.96900 * b2 + white * 0.1538520; b3 = 0.86650 * b3 + white * 0.3104856;
-                b4 = 0.55000 * b4 + white * 0.5329522; b5 = -0.7616 * b5 - white * 0.0168980;
-                data[i] = b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362;
-                data[i] *= 0.11; b6 = white * 0.115926;
-            }
+            for (let i = 0; i < bufferSize; i++) data[i] = (Math.random() * 2 - 1) * 0.1;
             const noiseNode = audioCtx.createBufferSource(); noiseNode.buffer = buffer; noiseNode.loop = true;
             const filter = audioCtx.createBiquadFilter(); 
             filter.type = 'bandpass'; filter.frequency.value = 800; filter.Q.value = 0.5;
@@ -533,8 +525,9 @@
         const container = document.getElementById('physics-canvas');
         const render = Render.create({ element: container, engine: engine, options: { width: window.innerWidth, height: window.innerHeight, background: 'transparent', wireframes: false } });
 
-        const w = window.innerWidth; const h = window.innerHeight;
-        const jarW = 340; const jarH = 480; const jarX = w / 2; const jarY = h - 60 - (jarH/2);
+        let w = window.innerWidth; let h = window.innerHeight;
+        let jarX = w / 2; let jarY = h - 60 - (480/2);
+        const jarW = 340; const jarH = 480; 
 
         const wallOpts = { isStatic: true, render: { visible: false } };
         const jarBottom = Bodies.rectangle(jarX, jarY + jarH/2 - 5, jarW - 25, 20, wallOpts);
@@ -595,17 +588,36 @@
             requestAnimationFrame(startCleanupLoop);
         }
 
+        // ===== 🚀 修复点击判定逻辑 (移动端防抖) =====
         let mouseDownPos = { x: 0, y: 0 };
-        function handleInteraction(e) { tryInitAudio(); mouseDownPos = { x: e.clientX || e.touches[0].clientX, y: e.clientY || e.touches[0].clientY }; }
-        container.addEventListener('mousedown', handleInteraction); container.addEventListener('touchstart', handleInteraction);
+        
+        function handleInteraction(e) { 
+            tryInitAudio(); 
+            // 兼容触摸和鼠标事件获取坐标
+            const x = e.clientX || (e.touches && e.touches[0] ? e.touches[0].clientX : 0);
+            const y = e.clientY || (e.touches && e.touches[0] ? e.touches[0].clientY : 0);
+            mouseDownPos = { x, y }; 
+        }
+        
+        container.addEventListener('mousedown', handleInteraction);
+        container.addEventListener('touchstart', handleInteraction);
+        
+        // 统一处理点击事件（兼容 click 和 touchend 模拟）
         container.addEventListener('click', (e) => {
-            const dx = Math.abs(e.clientX - mouseDownPos.x); const dy = Math.abs(e.clientY - mouseDownPos.y);
-            if (dx < 5 && dy < 5) {
+            const x = e.clientX;
+            const y = e.clientY;
+            
+            // 计算位移，如果位移很小（<10px），则认为是点击，不是拖拽
+            const dx = Math.abs(x - mouseDownPos.x);
+            const dy = Math.abs(y - mouseDownPos.y);
+            
+            if (dx < 10 && dy < 10) {
                 const bodies = Composite.allBodies(world).filter(b => b.label === 'star'); 
-                const clickedBody = Query.point(bodies, { x: e.clientX, y: e.clientY })[0];
+                const clickedBody = Query.point(bodies, { x, y })[0];
                 if (clickedBody && clickedBody.plugin && clickedBody.plugin.text) showRead(clickedBody.plugin);
             }
         });
+
 
         function spawnStar(x, y, text, date, colorHex) {
             const size = 18 + Math.random() * 10;
@@ -617,18 +629,28 @@
             tryInitAudio(); 
             SoundFX.page(); 
             document.getElementById('writeModal').classList.add('active'); 
-            // 自动聚焦优化
             setTimeout(() => { document.getElementById('moodText').focus(); }, 100);
         }
         function closeWriter() { SoundFX.page(); document.getElementById('writeModal').classList.remove('active'); }
         function setColor(varName) { selectedColorVar = varName; document.querySelectorAll('.c-dot').forEach(d => d.classList.remove('active')); event.target.classList.add('active'); }
+        
         function submitStar() {
-            const text = document.getElementById('moodText').value; if(!text) return; 
-            SoundFX.page(); closeWriter(); setTimeout(() => SoundFX.drop(), 600);
+            const textEl = document.getElementById('moodText');
+            const text = textEl.value; 
+            if(!text) return; 
+            
+            SoundFX.page(); closeWriter(); 
+            setTimeout(() => SoundFX.drop(), 600);
+            
             const dropX = jarX + (Math.random() * 40 - 20); const dropY = jarY - jarH/2 - 30; const date = new Date().toLocaleDateString();
             const actualColor = getCssVar(selectedColorVar.replace('var(', '').replace(')', ''));
-            spawnStar(dropX, dropY, text, date, actualColor); saveData(); document.getElementById('moodText').value = '';
+            spawnStar(dropX, dropY, text, date, actualColor); 
+            saveData(); 
+            
+            // 🚀 修复：提交后清空输入框
+            textEl.value = '';
         }
+
         function showRead(data) {
             SoundFX.page(); const m = document.getElementById('readModal'); document.getElementById('rDate').innerText = data.date; document.getElementById('rText').innerText = data.text;
             document.querySelector('.note-card').style.backgroundColor = data.color; m.classList.add('active');
@@ -681,33 +703,22 @@
             reader.readAsText(file);
         }
 
-        // ===== 🚀 核心修复：防键盘闪退补丁 =====
-        // 记录页面加载时的初始宽度
+        // ===== 核心修复：防键盘闪退补丁 =====
         let lastWidth = window.innerWidth;
-        
         window.addEventListener('resize', () => {
-            // 只有当宽度发生变化时（例如横屏/竖屏切换），才执行重置逻辑
-            // 如果宽度没变，说明只是软键盘弹起导致的高度变化，直接忽略，避免页面刷新或物理世界错位
             if (window.innerWidth === lastWidth) return;
-            
-            // 更新记录的宽度
             lastWidth = window.innerWidth;
             
-            // 下面是正常的画布适配逻辑
             resizeCanvas(); 
             render.canvas.width = window.innerWidth;
             render.canvas.height = window.innerHeight;
             
-            // 重新定位物理边界（只有旋转屏幕时才需要）
-            const w = window.innerWidth; 
-            const h = window.innerHeight;
-            const jarX = w / 2; 
-            const jarY = h - 60 - (480/2);
+            w = window.innerWidth; h = window.innerHeight;
+            jarX = w / 2; jarY = h - 60 - (480/2);
             
             Matter.Body.setPosition(jarBottom, { x: jarX, y: jarY + 480/2 - 5 });
             Matter.Body.setPosition(jarLeft, { x: jarX - 340/2 + 5, y: jarY });
             Matter.Body.setPosition(jarRight, { x: jarX + 340/2 - 5, y: jarY });
-            
             Matter.Body.setPosition(screenLeft, { x: 0 - 50, y: h/2 });
             Matter.Body.setPosition(screenRight, { x: w + 50, y: h/2 });
             Matter.Body.setPosition(screenTop, { x: w/2, y: -100 });
