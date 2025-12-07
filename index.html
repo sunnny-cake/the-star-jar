@@ -356,21 +356,32 @@
 
         function tryInitAudio() { if (audioCtx.state === 'suspended') audioCtx.resume(); initFrictionNoise(); }
 
-        // --- 1. 摩擦声引擎 ---
+        // --- 1. 摩擦声引擎 (替换为优质粉色噪音+清脆滤波) ---
         function initFrictionNoise() {
             if(noiseGain) return;
             const bufferSize = audioCtx.sampleRate * 2;
             const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
             const data = buffer.getChannelData(0);
-            for (let i = 0; i < bufferSize; i++) data[i] = (Math.random() * 2 - 1) * 0.1;
+            let b0=0,b1=0,b2=0,b3=0,b4=0,b5=0,b6=0;
+            for (let i = 0; i < bufferSize; i++) {
+                const white = Math.random() * 2 - 1;
+                b0 = 0.99886 * b0 + white * 0.0555179; b1 = 0.99332 * b1 + white * 0.0750759;
+                b2 = 0.96900 * b2 + white * 0.1538520; b3 = 0.86650 * b3 + white * 0.3104856;
+                b4 = 0.55000 * b4 + white * 0.5329522; b5 = -0.7616 * b5 - white * 0.0168980;
+                data[i] = b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362;
+                data[i] *= 0.11; b6 = white * 0.115926;
+            }
             const noiseNode = audioCtx.createBufferSource(); noiseNode.buffer = buffer; noiseNode.loop = true;
+            // 核心优化：bandpass 800Hz + Q 0.5 打造清脆沙沙声
             const filter = audioCtx.createBiquadFilter(); 
-            filter.type = 'bandpass'; filter.frequency.value = 800; filter.Q.value = 0.5;
+            filter.type = 'bandpass'; 
+            filter.frequency.value = 800; 
+            filter.Q.value = 0.5;
             noiseGain = audioCtx.createGain(); noiseGain.gain.value = 0;
             noiseNode.connect(filter).connect(noiseGain).connect(audioCtx.destination); noiseNode.start();
         }
 
-        // --- 2. 随机音效 ---
+        // --- 2. 随机音效 (保留优质版本) ---
         const RandomSFX = {
             cricket: () => {
                 if (audioCtx.state === 'suspended') return;
@@ -397,7 +408,7 @@
             }
         };
 
-        // --- 3. 氛围音效 ---
+        // --- 3. 氛围音效 (整合优质版本，rain使用粉色噪音) ---
         const Ambience = {
             stop: () => {
                 if (currentAmbience) {
@@ -412,9 +423,24 @@
             },
             rain: () => {
                 Ambience.stop();
-                const noise = createNoise(600, 'lowpass');
+                const bufferSize = audioCtx.sampleRate * 2;
+                const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+                const data = buffer.getChannelData(0);
+                // 生成自然粉色噪音
+                let b0=0,b1=0,b2=0,b3=0,b4=0,b5=0,b6=0;
+                for (let i = 0; i < bufferSize; i++) {
+                    const white = Math.random() * 2 - 1;
+                    b0 = 0.99886 * b0 + white * 0.0555179; b1 = 0.99332 * b1 + white * 0.0750759;
+                    b2 = 0.96900 * b2 + white * 0.1538520; b3 = 0.86650 * b3 + white * 0.3104856;
+                    b4 = 0.55000 * b4 + white * 0.5329522; b5 = -0.7616 * b5 - white * 0.0168980;
+                    data[i] = b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362;
+                    data[i] *= 0.11; b6 = white * 0.115926;
+                }
+                const noise = audioCtx.createBufferSource();
+                noise.buffer = buffer; noise.loop = true;
+                const filter = audioCtx.createBiquadFilter();
+                filter.type = 'lowpass'; filter.frequency.value = 400; 
                 const gain = audioCtx.createGain(); gain.gain.value = 0.15;
-                const filter = audioCtx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.value = 400; 
                 noise.connect(filter).connect(gain).connect(audioCtx.destination);
                 noise.start();
                 currentAmbience = { source: noise, gainParam: gain.gain };
@@ -451,7 +477,7 @@
             return filter; 
         }
 
-        // --- 4. 交互音效 ---
+        // --- 4. 交互音效 (保留优质版本) ---
         const SoundFX = {
             drop: () => {
                 if (audioCtx.state === 'suspended') audioCtx.resume();
@@ -588,12 +614,11 @@
             requestAnimationFrame(startCleanupLoop);
         }
 
-        // ===== 🚀 修复核心：完全重写点击判定 (Touch Logic Fix) =====
+        // ===== 🚀 修复核心：精准点击判定 (保留手机适配优化) =====
         let touchStartX = 0;
         let touchStartY = 0;
         let touchStartTime = 0;
 
-        // 1. 处理开始事件 (Mouse & Touch)
         function handleStart(x, y) {
             tryInitAudio();
             touchStartX = x;
@@ -601,19 +626,16 @@
             touchStartTime = Date.now();
         }
 
-        // 2. 处理结束事件 (手动判定点击)
         function handleEnd(x, y) {
             const dx = Math.abs(x - touchStartX);
             const dy = Math.abs(y - touchStartY);
             const dt = Date.now() - touchStartTime;
 
-            // 判定条件：移动距离小于 10px 且 按住时间小于 300ms => 认为是点击
             if (dx < 10 && dy < 10 && dt < 300) {
                 checkStarClick(x, y);
             }
         }
 
-        // 3. 执行星星查找
         function checkStarClick(x, y) {
             const bodies = Composite.allBodies(world).filter(b => b.label === 'star');
             const clickedBody = Query.point(bodies, { x: x, y: y })[0];
@@ -622,17 +644,14 @@
             }
         }
 
-        // 4. 绑定监听器
         container.addEventListener('mousedown', (e) => handleStart(e.clientX, e.clientY));
         container.addEventListener('mouseup', (e) => handleEnd(e.clientX, e.clientY));
-
         container.addEventListener('touchstart', (e) => {
             if(e.touches.length > 0) handleStart(e.touches[0].clientX, e.touches[0].clientY);
         });
         container.addEventListener('touchend', (e) => {
             if(e.changedTouches.length > 0) handleEnd(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
         });
-
 
         function spawnStar(x, y, text, date, colorHex) {
             const size = 18 + Math.random() * 10;
@@ -662,7 +681,6 @@
             spawnStar(dropX, dropY, text, date, actualColor); 
             saveData(); 
             
-            // 修复：提交后清空输入框
             textEl.value = '';
         }
 
@@ -708,7 +726,8 @@
             reader.onload = (e) => {
                 try {
                     const data = JSON.parse(e.target.result);
-                    if(Array.isArray(data)) {
+                    // 增强数据验证
+                    if(Array.isArray(data) && (data.length === 0 || (data[0] && data[0].t && data[0].d && data[0].c))) {
                         localStorage.setItem(KEY, JSON.stringify(data));
                         alert('回忆恢复成功！页面将刷新～');
                         location.reload();
@@ -718,7 +737,7 @@
             reader.readAsText(file);
         }
 
-        // ===== 防键盘闪退补丁 =====
+        // ===== 防键盘闪退补丁 (保留手机适配优化) =====
         let lastWidth = window.innerWidth;
         window.addEventListener('resize', () => {
             if (window.innerWidth === lastWidth) return;
@@ -739,6 +758,12 @@
             Matter.Body.setPosition(screenTop, { x: w/2, y: -100 });
             Matter.Body.setPosition(screenFloor, { x: w/2, y: h + 50 });
         });
+
+        function saveData() { 
+            const stars = Composite.allBodies(world).filter(b => b.plugin && b.plugin.text); 
+            const data = stars.map(b => ({ x: b.position.x, y: b.position.y, angle: b.angle, c: b.plugin.color, t: b.plugin.text, d: b.plugin.date })); 
+            localStorage.setItem(KEY, JSON.stringify(data)); 
+        }
 
         function loadData() { 
             const raw = localStorage.getItem(KEY); if (raw) JSON.parse(raw).forEach(d => spawnStar(d.x, d.y, d.t, d.d, d.c)); 
