@@ -352,7 +352,7 @@
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         let currentAmbience = null;
         let sfxLoop = null; 
-        let noiseGain = null; 
+        let noiseGain = null;
 
         function tryInitAudio() { if (audioCtx.state === 'suspended') audioCtx.resume(); initFrictionNoise(); }
 
@@ -588,34 +588,49 @@
             requestAnimationFrame(startCleanupLoop);
         }
 
-        // ===== 🚀 修复点击判定逻辑 (移动端防抖) =====
-        let mouseDownPos = { x: 0, y: 0 };
-        
-        function handleInteraction(e) { 
-            tryInitAudio(); 
-            // 兼容触摸和鼠标事件获取坐标
-            const x = e.clientX || (e.touches && e.touches[0] ? e.touches[0].clientX : 0);
-            const y = e.clientY || (e.touches && e.touches[0] ? e.touches[0].clientY : 0);
-            mouseDownPos = { x, y }; 
+        // ===== 🚀 修复核心：完全重写点击判定 (Touch Logic Fix) =====
+        let touchStartX = 0;
+        let touchStartY = 0;
+        let touchStartTime = 0;
+
+        // 1. 处理开始事件 (Mouse & Touch)
+        function handleStart(x, y) {
+            tryInitAudio();
+            touchStartX = x;
+            touchStartY = y;
+            touchStartTime = Date.now();
         }
-        
-        container.addEventListener('mousedown', handleInteraction);
-        container.addEventListener('touchstart', handleInteraction);
-        
-        // 统一处理点击事件（兼容 click 和 touchend 模拟）
-        container.addEventListener('click', (e) => {
-            const x = e.clientX;
-            const y = e.clientY;
-            
-            // 计算位移，如果位移很小（<10px），则认为是点击，不是拖拽
-            const dx = Math.abs(x - mouseDownPos.x);
-            const dy = Math.abs(y - mouseDownPos.y);
-            
-            if (dx < 10 && dy < 10) {
-                const bodies = Composite.allBodies(world).filter(b => b.label === 'star'); 
-                const clickedBody = Query.point(bodies, { x, y })[0];
-                if (clickedBody && clickedBody.plugin && clickedBody.plugin.text) showRead(clickedBody.plugin);
+
+        // 2. 处理结束事件 (手动判定点击)
+        function handleEnd(x, y) {
+            const dx = Math.abs(x - touchStartX);
+            const dy = Math.abs(y - touchStartY);
+            const dt = Date.now() - touchStartTime;
+
+            // 判定条件：移动距离小于 10px 且 按住时间小于 300ms => 认为是点击
+            if (dx < 10 && dy < 10 && dt < 300) {
+                checkStarClick(x, y);
             }
+        }
+
+        // 3. 执行星星查找
+        function checkStarClick(x, y) {
+            const bodies = Composite.allBodies(world).filter(b => b.label === 'star');
+            const clickedBody = Query.point(bodies, { x: x, y: y })[0];
+            if (clickedBody && clickedBody.plugin && clickedBody.plugin.text) {
+                showRead(clickedBody.plugin);
+            }
+        }
+
+        // 4. 绑定监听器
+        container.addEventListener('mousedown', (e) => handleStart(e.clientX, e.clientY));
+        container.addEventListener('mouseup', (e) => handleEnd(e.clientX, e.clientY));
+
+        container.addEventListener('touchstart', (e) => {
+            if(e.touches.length > 0) handleStart(e.touches[0].clientX, e.touches[0].clientY);
+        });
+        container.addEventListener('touchend', (e) => {
+            if(e.changedTouches.length > 0) handleEnd(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
         });
 
 
@@ -647,7 +662,7 @@
             spawnStar(dropX, dropY, text, date, actualColor); 
             saveData(); 
             
-            // 🚀 修复：提交后清空输入框
+            // 修复：提交后清空输入框
             textEl.value = '';
         }
 
@@ -703,7 +718,7 @@
             reader.readAsText(file);
         }
 
-        // ===== 核心修复：防键盘闪退补丁 =====
+        // ===== 防键盘闪退补丁 =====
         let lastWidth = window.innerWidth;
         window.addEventListener('resize', () => {
             if (window.innerWidth === lastWidth) return;
