@@ -346,7 +346,9 @@
         </div>
     </div>
 
-    <script>
+<script>
+        const KEY = 'star_jar_v6_final';
+        
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         let currentAmbience = null;
         let sfxLoop = null; 
@@ -354,7 +356,7 @@
 
         function tryInitAudio() { if (audioCtx.state === 'suspended') audioCtx.resume(); initFrictionNoise(); }
 
-        // --- 1. 摩擦声引擎 (替换为你想要的清脆沙沙声版本) ---
+        // --- 1. 摩擦声引擎 (Bandpass 800Hz - 清脆沙沙声) ---
         function initFrictionNoise() {
             if(noiseGain) return;
             const bufferSize = audioCtx.sampleRate * 2;
@@ -370,17 +372,13 @@
                 data[i] *= 0.11; b6 = white * 0.115926;
             }
             const noiseNode = audioCtx.createBufferSource(); noiseNode.buffer = buffer; noiseNode.loop = true;
-            // 核心修改：替换为 bandpass 800Hz + Q 0.5 (清脆沙沙声)
             const filter = audioCtx.createBiquadFilter(); 
-            filter.type = 'bandpass'; 
-            filter.frequency.value = 800; 
-            filter.Q.value = 0.5;
-            // 保留原有增益设置
+            filter.type = 'bandpass'; filter.frequency.value = 800; filter.Q.value = 0.5;
             noiseGain = audioCtx.createGain(); noiseGain.gain.value = 0;
             noiseNode.connect(filter).connect(noiseGain).connect(audioCtx.destination); noiseNode.start();
         }
 
-        // --- 2. 随机音效 (来自 v7.2) ---
+        // --- 2. 随机音效 ---
         const RandomSFX = {
             cricket: () => {
                 if (audioCtx.state === 'suspended') return;
@@ -407,7 +405,7 @@
             }
         };
 
-        // --- 3. 氛围音效 (完全保留原有参数，不做任何修改) ---
+        // --- 3. 氛围音效 ---
         const Ambience = {
             stop: () => {
                 if (currentAmbience) {
@@ -422,25 +420,9 @@
             },
             rain: () => {
                 Ambience.stop();
-                const bufferSize = audioCtx.sampleRate * 2;
-                const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-                const data = buffer.getChannelData(0);
-                // Pink noise generation
-                let b0=0,b1=0,b2=0,b3=0,b4=0,b5=0,b6=0;
-                for (let i = 0; i < bufferSize; i++) {
-                    const white = Math.random() * 2 - 1;
-                    b0 = 0.99886 * b0 + white * 0.0555179; b1 = 0.99332 * b1 + white * 0.0750759;
-                    b2 = 0.96900 * b2 + white * 0.1538520; b3 = 0.86650 * b3 + white * 0.3104856;
-                    b4 = 0.55000 * b4 + white * 0.5329522; b5 = -0.7616 * b5 - white * 0.0168980;
-                    data[i] = b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362;
-                    data[i] *= 0.11; b6 = white * 0.115926;
-                }
-                const noise = audioCtx.createBufferSource();
-                noise.buffer = buffer; noise.loop = true;
-                const filter = audioCtx.createBiquadFilter();
-                // 保留原有 rain 音效参数：lowpass 400Hz
-                filter.type = 'lowpass'; filter.frequency.value = 400; 
+                const noise = createNoise(600, 'lowpass');
                 const gain = audioCtx.createGain(); gain.gain.value = 0.15;
+                const filter = audioCtx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.value = 400; 
                 noise.connect(filter).connect(gain).connect(audioCtx.destination);
                 noise.start();
                 currentAmbience = { source: noise, gainParam: gain.gain };
@@ -477,7 +459,7 @@
             return filter; 
         }
 
-        // --- 4. 交互音效 (Drop/Page - 保持 star-jar.html 完美版) ---
+        // --- 4. 交互音效 ---
         const SoundFX = {
             drop: () => {
                 if (audioCtx.state === 'suspended') audioCtx.resume();
@@ -494,7 +476,7 @@
             }
         };
 
-        // --- 5. 粒子系统 (来自 index.html) ---
+        // --- 5. 粒子系统 ---
         const canvas = document.getElementById('atmosphere-canvas');
         const ctx = canvas.getContext('2d');
         let particles = []; let weatherMode = 'none';
@@ -540,22 +522,12 @@
             tryInitAudio();
             document.querySelectorAll('.scene-btn').forEach(b => b.classList.remove('active'));
             event.currentTarget.classList.add('active');
-            
-            // 样式重置
-            document.body.className = ''; 
-            if(mode !== 'sunny') document.body.classList.add(`scene-${mode}`);
-            
-            // 粒子重置
+            document.body.className = ''; if(mode !== 'sunny') document.body.classList.add(`scene-${mode}`);
             setWeather(mode === 'sunny' ? 'none' : mode);
-            
-            // 声音重置
-            if (mode === 'rain') Ambience.rain();
-            else if (mode === 'night') Ambience.wind();
-            else if (mode === 'fire') Ambience.fire();
-            else Ambience.stop();
+            if (mode === 'rain') Ambience.rain(); else if (mode === 'night') Ambience.wind(); else if (mode === 'fire') Ambience.fire(); else Ambience.stop();
         }
 
-        // --- 6. 物理引擎 (Matter.js - 保持 star-jar.html) ---
+        // --- 6. 物理引擎 ---
         const Engine = Matter.Engine, Render = Matter.Render, Runner = Matter.Runner, Bodies = Matter.Bodies, Composite = Matter.Composite, Mouse = Matter.Mouse, MouseConstraint = Matter.MouseConstraint, Events = Matter.Events, Body = Matter.Body, Query = Matter.Query;
         const engine = Engine.create(); const world = engine.world;
         const container = document.getElementById('physics-canvas');
@@ -583,13 +555,12 @@
         Composite.add(world, mouseConstraint); render.mouse = mouse;
         Render.run(render); const runner = Runner.create(); Runner.run(runner, engine);
 
-        // 物理摩擦声监听
         Events.on(engine, 'beforeUpdate', function() {
             if (!noiseGain) return;
             let totalKineticEnergy = 0;
             const bodies = Composite.allBodies(world);
             bodies.forEach(body => { if (!body.isStatic && body.label === 'star') { totalKineticEnergy += body.speed; } });
-            let targetVolume = Math.min(totalKineticEnergy * 0.005, 0.15); // 限制最大摩擦音量
+            let targetVolume = Math.min(totalKineticEnergy * 0.005, 0.15);
             if (noiseGain.gain.value > 0.16) return;
             const currentVol = noiseGain.gain.value;
             noiseGain.gain.value = currentVol + (targetVolume - currentVol) * 0.1;
@@ -610,14 +581,12 @@
                 btn.classList.remove('active-delete'); txt.innerText = "丢弃: 关";
             }
         }
-
         function shakeJarWithAnim() {
             tryInitAudio();
             const bodies = Composite.allBodies(world);
             bodies.forEach(body => { if (!body.isStatic) { Body.applyForce(body, body.position, { x: (Math.random() - 0.5) * 0.08, y: -0.06 - Math.random() * 0.06 }); } });
             jarVisual.classList.remove('jar-shaking'); void jarVisual.offsetWidth; jarVisual.classList.add('jar-shaking');
         }
-
         function startCleanupLoop() {
             if (!deleteMode) return;
             const bodies = Composite.allBodies(world); const toRemove = [];
@@ -644,7 +613,13 @@
             Matter.Body.setAngularVelocity(star, Math.random() * 0.4 - 0.2); Composite.add(world, star);
         }
 
-        function openWriter() { tryInitAudio(); SoundFX.page(); document.getElementById('writeModal').classList.add('active'); }
+        function openWriter() { 
+            tryInitAudio(); 
+            SoundFX.page(); 
+            document.getElementById('writeModal').classList.add('active'); 
+            // 自动聚焦优化
+            setTimeout(() => { document.getElementById('moodText').focus(); }, 100);
+        }
         function closeWriter() { SoundFX.page(); document.getElementById('writeModal').classList.remove('active'); }
         function setColor(varName) { selectedColorVar = varName; document.querySelectorAll('.c-dot').forEach(d => d.classList.remove('active')); event.target.classList.add('active'); }
         function submitStar() {
@@ -659,7 +634,6 @@
             document.querySelector('.note-card').style.backgroundColor = data.color; m.classList.add('active');
         }
         function closeRead() { SoundFX.page(); document.getElementById('readModal').classList.remove('active'); }
-
         function startEditTag() { document.getElementById('tagContainer').classList.add('editing'); }
         function endEditTag(el) { document.getElementById('tagContainer').classList.remove('editing'); localStorage.setItem('jar_tag_text', el.innerText); }
         function showStats() {
@@ -679,30 +653,16 @@
             document.getElementById('statsModal').classList.add('active');
         }
         function closeStats() { SoundFX.page(); document.getElementById('statsModal').classList.remove('active'); }
-
-        // ===== 新增：设置功能相关函数 =====
-        function openSettings() { 
-            SoundFX.page();
-            document.getElementById('settingsModal').classList.add('active'); 
-        }
-        function closeSettings(e) { 
-            if(e && e.target !== document.getElementById('settingsModal')) return;
-            SoundFX.page();
-            document.getElementById('settingsModal').classList.remove('active'); 
-        }
+        
+        function openSettings() { SoundFX.page(); document.getElementById('settingsModal').classList.add('active'); }
+        function closeSettings(e) { if(e && e.target !== document.getElementById('settingsModal')) return; SoundFX.page(); document.getElementById('settingsModal').classList.remove('active'); }
         function downloadData() {
             const data = localStorage.getItem(KEY);
-            if(!data) {
-                alert('还没有星星数据可以备份哦～');
-                return;
-            }
+            if(!data) { alert('还没有星星数据可以备份哦～'); return; }
             const blob = new Blob([data], {type: 'application/json'});
             const url = URL.createObjectURL(blob);
-            const a = document.createElement('a'); 
-            a.href = url; 
-            a.download = `star-jar-backup-${new Date().toLocaleDateString().replace(/\//g, '-')}.json`;
-            a.click(); 
-            URL.revokeObjectURL(url);
+            const a = document.createElement('a'); a.href = url; a.download = `star-jar-backup-${new Date().toLocaleDateString().replace(/\//g, '-')}.json`;
+            a.click(); URL.revokeObjectURL(url);
         }
         function loadFromFile(input) {
             const file = input.files[0];
@@ -711,29 +671,55 @@
             reader.onload = (e) => {
                 try {
                     const data = JSON.parse(e.target.result);
-                    // 验证数据格式
-                    if(Array.isArray(data) && (data.length === 0 || (data[0] && data[0].t && data[0].d && data[0].c))) {
+                    if(Array.isArray(data)) {
                         localStorage.setItem(KEY, JSON.stringify(data));
                         alert('回忆恢复成功！页面将刷新～');
                         location.reload();
-                    } else {
-                        alert('备份文件格式不正确，无法恢复 😢');
-                    }
-                } catch(err) { 
-                    alert('文件格式好像不对哦，试试重新备份？'); 
-                }
+                    } else { alert('备份文件格式不正确 😢'); }
+                } catch(err) { alert('文件解析失败，请检查文件'); }
             };
             reader.readAsText(file);
         }
 
-        const KEY = 'star_jar_v6_final';
-        function saveData() { const stars = Composite.allBodies(world).filter(b => b.plugin && b.plugin.text); const data = stars.map(b => ({ x: b.position.x, y: b.position.y, angle: b.angle, c: b.plugin.color, t: b.plugin.text, d: b.plugin.date })); localStorage.setItem(KEY, JSON.stringify(data)); }
+        // ===== 🚀 核心修复：防键盘闪退补丁 =====
+        // 记录页面加载时的初始宽度
+        let lastWidth = window.innerWidth;
+        
+        window.addEventListener('resize', () => {
+            // 只有当宽度发生变化时（例如横屏/竖屏切换），才执行重置逻辑
+            // 如果宽度没变，说明只是软键盘弹起导致的高度变化，直接忽略，避免页面刷新或物理世界错位
+            if (window.innerWidth === lastWidth) return;
+            
+            // 更新记录的宽度
+            lastWidth = window.innerWidth;
+            
+            // 下面是正常的画布适配逻辑
+            resizeCanvas(); 
+            render.canvas.width = window.innerWidth;
+            render.canvas.height = window.innerHeight;
+            
+            // 重新定位物理边界（只有旋转屏幕时才需要）
+            const w = window.innerWidth; 
+            const h = window.innerHeight;
+            const jarX = w / 2; 
+            const jarY = h - 60 - (480/2);
+            
+            Matter.Body.setPosition(jarBottom, { x: jarX, y: jarY + 480/2 - 5 });
+            Matter.Body.setPosition(jarLeft, { x: jarX - 340/2 + 5, y: jarY });
+            Matter.Body.setPosition(jarRight, { x: jarX + 340/2 - 5, y: jarY });
+            
+            Matter.Body.setPosition(screenLeft, { x: 0 - 50, y: h/2 });
+            Matter.Body.setPosition(screenRight, { x: w + 50, y: h/2 });
+            Matter.Body.setPosition(screenTop, { x: w/2, y: -100 });
+            Matter.Body.setPosition(screenFloor, { x: w/2, y: h + 50 });
+        });
+
         function loadData() { 
             const raw = localStorage.getItem(KEY); if (raw) JSON.parse(raw).forEach(d => spawnStar(d.x, d.y, d.t, d.d, d.c)); 
             const tagText = localStorage.getItem('jar_tag_text');
             if(tagText) document.querySelector('.tag-paper').innerText = tagText;
         }
-        setTimeout(loadData, 100); window.addEventListener('resize', () => location.reload());
+        setTimeout(loadData, 100);
     </script>
 </body>
-</html> 
+</html>
