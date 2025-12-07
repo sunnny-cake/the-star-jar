@@ -1,62 +1,824 @@
-# GitHub 上传步骤指南
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>My Star Jar | 治愈手账</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+    
+    <link rel="stylesheet" href="https://npm.elemecdn.com/lxgw-wenkai-screen-webfont/style.css" media="print" onload="this.media='all'">
+    <link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Zcool+KuaiLe&display=swap" rel="stylesheet"> 
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <style>
+        :root {
+            /* --- 核心视觉 (琥珀黄昏 - Paper Craft) --- */
+            --bg-color: #d8c8b0;
+            --paper-white: #fdfbf7;
+            --ink-color: #5a4a42;
+            --shadow-hard: 4px 4px 0px rgba(0,0,0,0.15);
+            --border-style: 2px solid #5a4a42;
+            
+            /* 星星颜色 */
+            --c-pink: #ff8a80; --c-orange: #ffd180; --c-green: #ccff90; --c-blue: #80d8ff; --c-purple: #ea80fc;
+            
+            /* 字体 */
+            --font-cute: "LXGW WenKai Screen", "YouYuan", sans-serif; 
+            --font-hand: "Ma Shan Zheng", "LXGW WenKai Screen", cursive;
 
-## 已完成 ✅
-- ✅ Git 仓库已初始化
-- ✅ 文件已添加到暂存区
-- ✅ 代码已提交到本地仓库
+            /* 场景默认变量 */
+            --glass-tint: rgba(255, 255, 255, 0.25);
+            
+            /* 🌟 重点：这是 star-jar.html 原版的纸质网格背景纹理 */
+            --bg-sunny-tex: 
+                linear-gradient(rgba(255,255,255,0.3) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.3) 1px, transparent 1px),
+                url("data:image/svg+xml,%3Csvg width='200' height='200' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.15'/%3E%3C/svg%3E");
+        }
 
-## 接下来需要做的：
+        /* --- 场景变体 (来自 index.html 的配色) --- */
+        /* 覆盖默认背景，使用渐变色 */
+        body.scene-rain {
+            --bg-color: #78909c; /* 灰蓝 */
+            --ink-color: #e0f7fa;
+            --paper-white: #455a64;
+            --glass-tint: rgba(200, 220, 230, 0.2);
+            --border-style: 2px solid #b0bec5;
+            background-image: linear-gradient(to bottom, #546e7a 0%, #455a64 100%) !important;
+            background-size: auto !important;
+        }
+        body.scene-night {
+            --bg-color: #2c1e38; /* 深紫 */
+            --ink-color: #e6e6fa;
+            --paper-white: #252538;
+            --glass-tint: rgba(100, 100, 150, 0.2);
+            --border-style: 2px solid #7b68ee;
+            background-image: linear-gradient(to bottom, #1a1a2e 0%, #16213e 100%) !important;
+            background-size: auto !important;
+        }
+        body.scene-fire {
+            --bg-color: #3e2723; /* 深褐 */
+            --ink-color: #ffccbc;
+            --paper-white: #4e342e;
+            --glass-tint: rgba(255, 200, 150, 0.1);
+            --border-style: 2px solid #ffab91;
+            background-image: radial-gradient(circle at 50% 80%, #5d4037 0%, #3e2723 100%) !important;
+            background-size: auto !important;
+        }
+        
+        /* 丢弃模式 */
+        body.delete-mode { filter: grayscale(0.8) sepia(0.5); }
+        /* 适配深色模式下激活按钮的文字颜色 */
+        body.scene-rain .scene-btn.active, body.scene-night .scene-btn.active, body.scene-fire .scene-btn.active { color: #333; }
 
-### 1. 在 GitHub 上创建新仓库
-1. 访问 https://github.com 并登录
-2. 点击右上角 `+` → `New repository`
-3. 填写仓库信息：
-   - Repository name: `the-star-jar`（或你喜欢的名字）
-   - Description: `一个基于物理引擎的情绪手账 Web 应用`
-   - 选择 Public 或 Private
-   - **不要勾选** "Initialize this repository with a README"
-4. 点击 `Create repository`
+        /* 修复：全局去掉 touch-action: none，只给特定元素设置 */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        /* 物理画布、罐子区域需要禁用触摸缩放/滚动，其他元素正常 */
+        #physics-canvas, .jar-visual, .fab-shake, .fab-stats, .fab-settings {
+            touch-action: none;
+        }
 
-### 2. 连接本地仓库到 GitHub
-创建仓库后，GitHub 会显示命令。在项目目录下运行：
+        body {
+            background-color: var(--bg-color);
+            /* 默认使用纸质网格背景 */
+            background-image: var(--bg-sunny-tex);
+            background-size: 20px 20px, 20px 20px, auto;
+            height: 100vh; overflow: hidden;
+            font-family: var(--font-cute); color: var(--ink-color);
+            display: flex; flex-direction: column; align-items: center;
+            transition: all 1s ease;
+        }
 
-```bash
-# 将 YOUR_USERNAME 替换为你的 GitHub 用户名
-# 将 the-star-jar 替换为你创建的仓库名
+        /* --- 顶部 UI --- */
+        .header { position: absolute; top: 20px; z-index: 100; display: flex; flex-direction: column; align-items: center; gap: 15px; }
+        
+        .main-actions { display: flex; gap: 15px; }
 
-git remote add origin https://github.com/YOUR_USERNAME/the-star-jar.git
-git branch -M main
-git push -u origin main
-```
+        .scene-switcher {
+            display: flex; gap: 10px; 
+            background: var(--paper-white); 
+            padding: 5px 10px; border-radius: 30px; 
+            border: var(--border-style);
+            box-shadow: var(--shadow-hard);
+        }
+        .scene-btn {
+            width: 32px; height: 32px; border-radius: 50%; border: 1px solid transparent; cursor: pointer;
+            display: flex; justify-content: center; align-items: center; font-size: 1rem;
+            transition: all 0.2s; background: transparent; color: var(--ink-color);
+            opacity: 0.5;
+            /* 手机端最小触摸区域优化 */
+            min-width: 44px;
+            min-height: 44px;
+        }
+        .scene-btn:hover { opacity: 1; transform: scale(1.1); }
+        .scene-btn.active { 
+            background: var(--ink-color); opacity: 1; color: var(--paper-white);
+        }
 
-### 3. 如果遇到认证问题
-如果提示需要认证，可以：
-- 使用 GitHub Personal Access Token（推荐）
-- 或使用 GitHub CLI (`gh auth login`)
+        .btn {
+            background: var(--paper-white); border: var(--border-style);
+            padding: 8px 20px; border-radius: 10px; color: var(--ink-color);
+            font-size: 1rem; cursor: pointer; box-shadow: var(--shadow-hard);
+            transition: all 0.2s; display: flex; align-items: center; gap: 8px;
+            user-select: none; font-family: var(--font-cute); font-weight: bold;
+            /* 手机端最小触摸区域优化 */
+            min-width: 44px;
+            min-height: 44px;
+        }
+        .btn:active { transform: translate(2px, 2px); box-shadow: 0 0 0 transparent; }
+        .btn.active-delete { background: #ffcccb; color: #d32f2f; border-color: #d32f2f; }
 
-### 4. 验证上传
-上传成功后，刷新 GitHub 仓库页面，应该能看到所有文件。
+        /* 悬浮按钮 */
+        .fab-shake, .fab-stats {
+            position: absolute; bottom: 35px; 
+            width: 60px; height: 60px; border-radius: 50%;
+            background: var(--paper-white); border: var(--border-style);
+            color: var(--ink-color); font-size: 1.5rem;
+            display: flex; justify-content: center; align-items: center;
+            cursor: pointer; z-index: 100; box-shadow: var(--shadow-hard);
+            transition: transform 0.1s; user-select: none;
+            /* 手机端最小触摸区域优化 */
+            min-width: 44px;
+            min-height: 44px;
+        }
+        .fab-shake { right: 30px; }
+        .fab-stats { left: 30px; width: 50px; height: 50px; font-size: 1.2rem; }
+        .fab-shake:active, .fab-stats:active { transform: translate(2px, 2px); box-shadow: none; }
 
-## 快速命令（复制粘贴）
+        /* ===== 新增：设置按钮样式 ===== */
+        .fab-settings {
+            position: absolute; top: 20px; right: 20px; 
+            width: 40px; height: 40px; border-radius: 50%;
+            background: var(--paper-white); border: var(--border-style);
+            color: var(--ink-color); font-size: 1.2rem;
+            display: flex; justify-content: center; align-items: center;
+            cursor: pointer; z-index: 100; box-shadow: var(--shadow-hard);
+            transition: transform 0.1s; user-select: none;
+            bottom: auto;
+            /* 手机端最小触摸区域优化 */
+            min-width: 44px;
+            min-height: 44px;
+        }
+        .fab-settings:active { transform: translate(2px, 2px); box-shadow: none; }
 
-```bash
-# 1. 添加远程仓库（替换 YOUR_USERNAME 和仓库名）
-git remote add origin https://github.com/YOUR_USERNAME/the-star-jar.git
+        /* --- 罐子视觉 (硫酸纸风格) --- */
+        .jar-visual {
+            position: absolute; bottom: 60px; left: 50%;
+            transform: translateX(-50%); width: 340px; height: 480px;
+            pointer-events: none; z-index: 10; 
+        }
 
-# 2. 设置主分支
-git branch -M main
+        @keyframes jarShakeAnim {
+            0% { transform: translateX(-50%) rotate(0deg); }
+            25% { transform: translateX(-52%) rotate(-3deg); }
+            50% { transform: translateX(-48%) rotate(3deg); }
+            75% { transform: translateX(-51%) rotate(-1deg); }
+            100% { transform: translateX(-50%) rotate(0deg); }
+        }
+        .jar-shaking { animation: jarShakeAnim 0.4s ease-in-out; }
 
-# 3. 推送到 GitHub
-git push -u origin main
-```
+        .jar-body {
+            width: 100%; height: 100%;
+            border-radius: 25px 25px 60px 60px;
+            border: 4px solid; border-color: inherit; 
+            outline: 2px dashed #bbb; outline-offset: -10px;
+            border-top: none; background: var(--glass-tint); 
+            box-shadow: inset 0 0 20px rgba(255,255,255,0.3), 10px 10px 0px rgba(0,0,0,0.1);
+            backdrop-filter: blur(2px);
+            transition: all 1s;
+            border-color: var(--ink-color);
+        }
 
-## 后续更新代码
+        .jar-neck {
+            position: absolute; top: -25px; left: 15px; right: 15px; height: 25px;
+            border: 4px solid; border-bottom: none;
+            border-radius: 10px 10px 0 0; background: var(--glass-tint);
+            border-color: var(--ink-color);
+        }
+        .jar-neck::after {
+            content: ''; position: absolute; top: 8px; left: -5px; right: -5px; height: 6px;
+            background: #d7ccc8; border-radius: 4px; border: 1px solid #a1887f;
+        }
 
-如果以后修改了代码，使用以下命令更新：
+        /* 吊牌 */
+        .tag-container {
+            position: absolute; top: 25px; right: -25px; 
+            min-height: 100px; width: 50px; pointer-events: auto;
+            transform-origin: top center; transition: all 0.4s; z-index: 20; display: flex; justify-content: center;
+        }
+        .tag-string {
+            position: absolute; top: -20px; left: 50%; width: 2px; height: 30px;
+            background: var(--ink-color); transform: translateX(-50%) rotate(-10deg); z-index: -1;
+        }
+        .tag-paper {
+            background: var(--paper-white); border: var(--border-style); border-radius: 6px;
+            box-shadow: 3px 3px 5px rgba(0,0,0,0.2); padding: 15px 10px;
+            writing-mode: vertical-lr; text-orientation: upright;
+            font-family: var(--font-hand); font-size: 1.2rem; color: var(--ink-color);
+            letter-spacing: 2px; cursor: pointer; white-space: nowrap;
+            height: auto; min-height: 80px;
+        }
+        .tag-paper::before {
+            content: ''; position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
+            width: 6px; height: 6px; background: var(--ink-color); border-radius: 50%; opacity: 0.3;
+        }
+        .tag-container:hover { transform: scale(1.1) rotate(5deg); }
+        .tag-container.editing {
+            width: auto; min-width: 150px; height: 60px; min-height: auto;
+            top: 50px; right: -80px; transform: rotate(0deg);
+        }
+        .tag-container.editing .tag-paper { writing-mode: horizontal-tb; padding: 0 15px; height: 50px; align-items: center; display: flex; }
+        .tag-container.editing .tag-string { display: none; }
 
-```bash
-git add .
-git commit -m "更新说明"
-git push
-```
+        /* 粒子 & 物理层 */
+        #atmosphere-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; }
+        #physics-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 5; }
+        .sound-tip { position: absolute; bottom: 10px; left: 10px; font-size: 0.8rem; color: var(--ink-color); pointer-events: none; opacity: 0.5; font-family: var(--font-cute); }
 
+        /* 弹窗 */
+        .read-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 200; display: flex; justify-content: center; align-items: center; opacity: 0; pointer-events: none; transition: opacity 0.1s ease-out; }
+        .read-modal.active { opacity: 1; pointer-events: auto; }
+        .note-card { background: #fff9c4; width: 85%; max-width: 320px; padding: 25px; box-shadow: 8px 8px 0px rgba(0,0,0,0.2); transform: scale(0.9) rotate(-2deg); transition: transform 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275); position: relative; border: 1px solid #e0e0e0; }
+        .note-card::before { content: ''; position: absolute; top: -15px; left: 50%; transform: translateX(-50%); width: 80px; height: 30px; background: rgba(255,255,255,0.4); border-left: 2px dashed rgba(0,0,0,0.1); border-right: 2px dashed rgba(0,0,0,0.1); box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .read-modal.active .note-card { transform: scale(1) rotate(0deg); }
+        .note-date { font-size: 0.9rem; color: #888; margin-bottom: 10px; font-family: var(--font-cute); border-bottom: 2px dotted #aaa; padding-bottom: 5px;}
+        .note-content { font-family: var(--font-hand); font-size: 1.4rem; color: #444; min-height: 100px; line-height: 1.6;}
+        .note-close { position: absolute; top: 5px; right: 10px; font-size: 1.5rem; color: #aaa; cursor: pointer; font-family: var(--font-cute);}
+
+        .stats-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 200; display: flex; justify-content: center; align-items: center; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
+        .stats-modal.active { opacity: 1; pointer-events: auto; }
+        .stats-card { background: var(--paper-white); width: 85%; max-width: 300px; padding: 25px; border-radius: 8px; border: var(--border-style); box-shadow: var(--shadow-hard); text-align: center; position: relative; color: var(--ink-color); }
+        .stats-close { position: absolute; top: 5px; right: 10px; font-size: 1.5rem; cursor: pointer; color: inherit; font-family: var(--font-cute);}
+        .stats-title { font-size: 1.2rem; margin-bottom: 20px; border-bottom: 2px dashed currentColor; padding-bottom: 10px; font-weight: bold; }
+        .stats-row { display: flex; align-items: center; justify-content: space-between; margin: 12px 0; font-family: var(--font-cute); font-size: 1rem; color: inherit; }
+        .stats-dot { width: 12px; height: 12px; border-radius: 50%; margin-right: 8px; display: inline-block; border: 1px solid rgba(255,255,255,0.3); }
+
+        /* 修复：输入弹窗样式优化，适配手机键盘 */
+        .input-overlay { 
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+            background: rgba(0,0,0,0.5); z-index: 300; 
+            display: flex; justify-content: center; 
+            align-items: flex-start; /* 改为靠上对齐，避免键盘遮挡 */
+            padding-top: 20px; /* 顶部留白 */
+            opacity: 0; pointer-events: none; 
+            transition: opacity 0.3s;
+            overflow-y: auto; /* 防止弹窗被键盘顶出视口 */
+        }
+        .input-overlay.active { opacity: 1; pointer-events: auto; }
+        .input-paper { 
+            width: 90%; /* 适配小屏手机 */
+            max-width: 320px;
+            padding: 25px; 
+            background: #fffdf0; 
+            box-shadow: 10px 10px 0px rgba(0,0,0,0.2); 
+            border: 2px solid #5a4a42; 
+            display: flex; flex-direction: column; gap: 20px;
+            transform: rotate(0deg); /* 取消旋转，避免输入时视觉错乱 */
+        }
+        /* 修复：输入框样式优化，恢复触摸交互 */
+        textarea { 
+            width: 100%; height: 140px; 
+            border: none; padding: 10px; /* 增加内边距 */
+            font-size: 1.2rem; outline: none; resize: none; 
+            color: #444; background: transparent; 
+            font-family: var(--font-hand); 
+            background-image: repeating-linear-gradient(transparent, transparent 34px, #d7ccc8 35px); 
+            line-height: 35px;
+            overflow-y: auto; /* 允许输入框滚动 */
+            touch-action: auto; /* 恢复输入框触摸交互 */
+        }
+        .color-row { display: flex; justify-content: space-between; padding: 0 10px;}
+        .c-dot { 
+            width: 32px; height: 32px; border-radius: 50%; cursor: pointer; 
+            border: 2px solid #fff; box-shadow: 2px 2px 0 rgba(0,0,0,0.1);
+            /* 手机端最小触摸区域优化 */
+            min-width: 44px;
+            min-height: 44px;
+        }
+        .c-dot.active { border: 2px solid #333; transform: scale(1.1); }
+        .btn-submit { background: #8d6e63; color: white; border: 2px solid #5d4037; padding: 10px; cursor: pointer; font-size: 1.1rem; font-family: var(--font-cute); box-shadow: 3px 3px 0 #5d4037; transition: all 0.1s; }
+        .btn-submit:active { transform: translate(3px, 3px); box-shadow: none; }
+
+        /* ===== 新增：设置弹窗样式 ===== */
+        .settings-modal { 
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+            background: rgba(0,0,0,0.5); z-index: 300; 
+            display: flex; justify-content: center; align-items: center; 
+            opacity: 0; pointer-events: none; transition: opacity 0.2s; 
+        }
+        .settings-modal.active { opacity: 1; pointer-events: auto; }
+        .settings-card { 
+            background: var(--paper-white); width: 85%; max-width: 300px; 
+            padding: 25px; border-radius: 8px; border: var(--border-style); 
+            box-shadow: var(--shadow-hard); text-align: center; position: relative; 
+            color: var(--ink-color); 
+        }
+        .settings-close { 
+            position: absolute; top: 5px; right: 10px; font-size: 1.5rem; 
+            cursor: pointer; color: inherit; font-family: var(--font-cute);
+        }
+        .settings-btn-row { 
+            display: flex; gap: 10px; justify-content: center; 
+            margin-top: 20px; 
+        }
+        .btn-settings { 
+            flex:1; background: #eee; border: 1px solid #ccc; 
+            padding: 10px; border-radius: 8px; cursor: pointer; 
+            font-family: var(--font-cute); transition: all 0.2s; 
+            /* 手机端最小触摸区域优化 */
+            min-width: 44px;
+            min-height: 44px;
+        }
+        .btn-settings:hover { background: #ddd; }
+
+    </style>
+</head>
+<body onclick="tryInitAudio()">
+
+    <div class="header">
+        <div class="scene-switcher">
+            <button class="scene-btn active" onclick="switchScene('sunny')" title="暖阳"><i class="fas fa-sun"></i></button>
+            <button class="scene-btn" onclick="switchScene('rain')" title="听雨"><i class="fas fa-cloud-rain"></i></button>
+            <button class="scene-btn" onclick="switchScene('night')" title="萤火"><i class="fas fa-moon"></i></button>
+            <button class="scene-btn" onclick="switchScene('fire')" title="炉火"><i class="fas fa-fire"></i></button>
+        </div>
+
+        <div class="main-actions">
+            <button class="btn" onclick="openWriter()"><i class="fas fa-pen"></i> 写一颗</button>
+            <button class="btn" id="btnDelete" onclick="toggleDeleteMode()">
+                <i class="fas fa-eraser"></i> 
+                <span id="delText">丢弃: 关</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- ===== 新增：设置悬浮按钮 ===== -->
+    <div class="fab-settings" onclick="openSettings()" title="数据管理">
+        <i class="fas fa-cog"></i>
+    </div>
+
+    <div class="fab-shake" onclick="shakeJarWithAnim()" title="摇晃罐子">
+        <i class="fas fa-sync-alt"></i>
+    </div>
+    
+    <div class="fab-stats" onclick="showStats()" title="查看成分">
+        <i class="fas fa-chart-pie"></i>
+    </div>
+
+    <div class="jar-visual" id="jarVisual">
+        <div class="jar-neck"></div>
+        <div class="jar-body"></div>
+        <div class="tag-container" id="tagContainer">
+            <div class="tag-string"></div>
+            <div class="tag-paper" contenteditable="true" onfocus="startEditTag()" onblur="endEditTag(this)">我的星星罐</div>
+        </div>
+    </div>
+
+    <canvas id="atmosphere-canvas"></canvas>
+    <div id="physics-canvas"></div>
+    <div class="sound-tip">🔊 点击任意处开启治愈音效</div>
+
+    <div class="read-modal" id="readModal" onclick="closeRead(event)"><div class="note-card" onclick="event.stopPropagation()"><div class="note-close" onclick="closeRead()">×</div><div class="note-date" id="rDate"></div><div class="note-content" id="rText"></div></div></div>
+    <div class="stats-modal" id="statsModal" onclick="closeStats(event)"><div class="stats-card" onclick="event.stopPropagation()"><div class="stats-close" onclick="closeStats()">×</div><div class="stats-title">罐子成分表</div><div id="statsList"></div></div></div>
+    <div class="input-overlay" id="writeModal"><div class="input-paper"><h3 style="text-align:center; color:#5d4037; font-family: var(--font-cute);">折叠心事</h3><textarea id="moodText" placeholder="今天发生了什么..."></textarea><div class="color-row"><div class="c-dot active" style="background:var(--c-pink)" onclick="setColor('var(--c-pink)')"></div><div class="c-dot" style="background:var(--c-orange)" onclick="setColor('var(--c-orange)')"></div><div class="c-dot" style="background:var(--c-green)" onclick="setColor('var(--c-green)')"></div><div class="c-dot" style="background:var(--c-blue)" onclick="setColor('var(--c-blue)')"></div><div class="c-dot" style="background:var(--c-purple)" onclick="setColor('var(--c-purple)')"></div></div><button class="btn-submit" onclick="submitStar()">放入罐子</button><div style="text-align:center; font-size:0.9rem; color:#8d6e63; cursor:pointer; margin-top:-5px; font-family:var(--font-cute);" onclick="closeWriter()">取消</div></div></div>
+
+    <!-- ===== 新增：设置弹窗 ===== -->
+    <div class="settings-modal" id="settingsModal" onclick="closeSettings(event)">
+        <div class="settings-card" onclick="event.stopPropagation()">
+            <div class="settings-close" onclick="closeSettings()">×</div>
+            <div class="stats-title">数据管家</div>
+            <p style="color:#666; font-size:0.9rem; margin-bottom:20px;">请定期备份你的回忆哦~</p>
+            <div class="settings-btn-row">
+                <button class="btn-settings" onclick="downloadData()"><i class="fas fa-download"></i> 备份回忆</button>
+                <button class="btn-settings" onclick="document.getElementById('importFile').click()"><i class="fas fa-upload"></i> 恢复回忆</button>
+                <input type="file" id="importFile" style="display:none" onchange="loadFromFile(this)">
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 修复：将 KEY 变量提到顶部，确保所有函数可访问
+        const KEY = 'star_jar_v6_final';
+        
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        let currentAmbience = null;
+        let sfxLoop = null; 
+        let noiseGain = null; // 摩擦声增益
+
+        function tryInitAudio() { if (audioCtx.state === 'suspended') audioCtx.resume(); initFrictionNoise(); }
+
+        // --- 1. 摩擦声引擎 (替换为你想要的清脆沙沙声版本) ---
+        function initFrictionNoise() {
+            if(noiseGain) return;
+            const bufferSize = audioCtx.sampleRate * 2;
+            const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const data = buffer.getChannelData(0);
+            let b0=0,b1=0,b2=0,b3=0,b4=0,b5=0,b6=0;
+            for (let i = 0; i < bufferSize; i++) {
+                const white = Math.random() * 2 - 1;
+                b0 = 0.99886 * b0 + white * 0.0555179; b1 = 0.99332 * b1 + white * 0.0750759;
+                b2 = 0.96900 * b2 + white * 0.1538520; b3 = 0.86650 * b3 + white * 0.3104856;
+                b4 = 0.55000 * b4 + white * 0.5329522; b5 = -0.7616 * b5 - white * 0.0168980;
+                data[i] = b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362;
+                data[i] *= 0.11; b6 = white * 0.115926;
+            }
+            const noiseNode = audioCtx.createBufferSource(); noiseNode.buffer = buffer; noiseNode.loop = true;
+            // 核心修改：替换为 bandpass 800Hz + Q 0.5 (清脆沙沙声)
+            const filter = audioCtx.createBiquadFilter(); 
+            filter.type = 'bandpass'; 
+            filter.frequency.value = 800; 
+            filter.Q.value = 0.5;
+            // 保留原有增益设置
+            noiseGain = audioCtx.createGain(); noiseGain.gain.value = 0;
+            noiseNode.connect(filter).connect(noiseGain).connect(audioCtx.destination); noiseNode.start();
+        }
+
+        // --- 2. 随机音效 (来自 v7.2) ---
+        const RandomSFX = {
+            cricket: () => {
+                if (audioCtx.state === 'suspended') return;
+                const t = audioCtx.currentTime; const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+                osc.type = 'sine'; osc.frequency.setValueAtTime(4000, t); osc.frequency.linearRampToValueAtTime(4200, t + 0.1);
+                gain.gain.setValueAtTime(0, t); gain.gain.linearRampToValueAtTime(0.05, t + 0.05); gain.gain.linearRampToValueAtTime(0, t + 0.2);
+                osc.connect(gain).connect(audioCtx.destination); osc.start(t); osc.stop(t + 0.2);
+            },
+            raindrop: () => {
+                if (audioCtx.state === 'suspended') return;
+                const t = audioCtx.currentTime; const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+                osc.frequency.setValueAtTime(1200 + Math.random()*400, t); osc.frequency.exponentialRampToValueAtTime(600, t + 0.1);
+                gain.gain.setValueAtTime(0, t); gain.gain.linearRampToValueAtTime(0.05, t + 0.01); gain.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+                osc.connect(gain).connect(audioCtx.destination); osc.start(t); osc.stop(t + 0.15);
+            },
+            crackle: () => {
+                if (audioCtx.state === 'suspended') return;
+                const bufferSize = audioCtx.sampleRate * 0.05; const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+                const data = buffer.getChannelData(0); for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+                const noise = audioCtx.createBufferSource(); noise.buffer = buffer;
+                const hp = audioCtx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 2000;
+                const gain = audioCtx.createGain(); gain.gain.value = 0.05;
+                noise.connect(hp).connect(gain).connect(audioCtx.destination); noise.start();
+            }
+        };
+
+        // --- 3. 氛围音效 (完全保留原有参数，不做任何修改) ---
+        const Ambience = {
+            stop: () => {
+                if (currentAmbience) {
+                    try {
+                        const gain = currentAmbience.gainParam; 
+                        if(gain) gain.linearRampToValueAtTime(0, audioCtx.currentTime + 2);
+                        currentAmbience.source.stop(audioCtx.currentTime + 2);
+                    } catch(e){}
+                    currentAmbience = null;
+                }
+                if (sfxLoop) { clearInterval(sfxLoop); sfxLoop = null; }
+            },
+            rain: () => {
+                Ambience.stop();
+                const bufferSize = audioCtx.sampleRate * 2;
+                const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+                const data = buffer.getChannelData(0);
+                // Pink noise generation
+                let b0=0,b1=0,b2=0,b3=0,b4=0,b5=0,b6=0;
+                for (let i = 0; i < bufferSize; i++) {
+                    const white = Math.random() * 2 - 1;
+                    b0 = 0.99886 * b0 + white * 0.0555179; b1 = 0.99332 * b1 + white * 0.0750759;
+                    b2 = 0.96900 * b2 + white * 0.1538520; b3 = 0.86650 * b3 + white * 0.3104856;
+                    b4 = 0.55000 * b4 + white * 0.5329522; b5 = -0.7616 * b5 - white * 0.0168980;
+                    data[i] = b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362;
+                    data[i] *= 0.11; b6 = white * 0.115926;
+                }
+                const noise = audioCtx.createBufferSource();
+                noise.buffer = buffer; noise.loop = true;
+                const filter = audioCtx.createBiquadFilter();
+                // 保留原有 rain 音效参数：lowpass 400Hz
+                filter.type = 'lowpass'; filter.frequency.value = 400; 
+                const gain = audioCtx.createGain(); gain.gain.value = 0.15;
+                noise.connect(filter).connect(gain).connect(audioCtx.destination);
+                noise.start();
+                currentAmbience = { source: noise, gainParam: gain.gain };
+                sfxLoop = setInterval(() => { if(Math.random() > 0.7) RandomSFX.raindrop(); }, 800);
+            },
+            wind: () => {
+                Ambience.stop();
+                const noise = createNoise(400, 'bandpass', 2);
+                const gain = audioCtx.createGain(); gain.gain.value = 0.05;
+                const lfo = audioCtx.createOscillator(); lfo.frequency.value = 0.05;
+                const lfoGain = audioCtx.createGain(); lfoGain.gain.value = 0.02;
+                lfo.connect(lfoGain).connect(gain.gain); lfo.start();
+                noise.connect(gain).connect(audioCtx.destination);
+                currentAmbience = { source: noise, gainParam: gain.gain };
+                sfxLoop = setInterval(() => { if(Math.random() > 0.8) RandomSFX.cricket(); }, 2000);
+            },
+            fire: () => {
+                Ambience.stop();
+                const noise = createNoise(150, 'lowpass'); 
+                const gain = audioCtx.createGain(); gain.gain.value = 0.1;
+                noise.connect(gain).connect(audioCtx.destination);
+                currentAmbience = { source: noise, gainParam: gain.gain };
+                sfxLoop = setInterval(() => { if(Math.random() > 0.85) RandomSFX.crackle(); }, 1500);
+            }
+        };
+
+        function createNoise(freq, type, q=1) {
+            const bufferSize = audioCtx.sampleRate * 2; const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+            const noise = audioCtx.createBufferSource(); noise.buffer = buffer; noise.loop = true;
+            const filter = audioCtx.createBiquadFilter(); filter.type = type; filter.frequency.value = freq; filter.Q.value = q;
+            noise.connect(filter); noise.start();
+            return filter; 
+        }
+
+        // --- 4. 交互音效 (Drop/Page - 保持 star-jar.html 完美版) ---
+        const SoundFX = {
+            drop: () => {
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+                const t = audioCtx.currentTime; const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+                osc.type = 'triangle'; osc.frequency.setValueAtTime(150 + Math.random() * 50, t); osc.frequency.exponentialRampToValueAtTime(50, t + 0.1);
+                gain.gain.setValueAtTime(0, t); gain.gain.linearRampToValueAtTime(0.25, t + 0.01); gain.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+                osc.connect(gain); gain.connect(audioCtx.destination); osc.start(t); osc.stop(t + 0.15);
+            },
+            page: () => {
+                if (!noiseGain) return;
+                const t = audioCtx.currentTime;
+                noiseGain.gain.cancelScheduledValues(t); noiseGain.gain.setValueAtTime(noiseGain.gain.value, t);
+                noiseGain.gain.linearRampToValueAtTime(0.15, t + 0.05); noiseGain.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+            }
+        };
+
+        // --- 5. 粒子系统 (来自 index.html) ---
+        const canvas = document.getElementById('atmosphere-canvas');
+        const ctx = canvas.getContext('2d');
+        let particles = []; let weatherMode = 'none';
+
+        function resizeCanvas() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+        window.addEventListener('resize', resizeCanvas); resizeCanvas();
+
+        class Particle {
+            constructor() { this.reset(); }
+            reset() {
+                this.x = Math.random() * canvas.width; this.y = Math.random() * canvas.height;
+                if (weatherMode === 'rain') {
+                    this.y = Math.random() * -canvas.height; 
+                    this.vy = 5 + Math.random() * 5; this.len = 10 + Math.random() * 10;
+                    this.color = 'rgba(200,220,230,0.4)';
+                } else if (weatherMode === 'night') {
+                    this.vx = (Math.random() - 0.5) * 0.2; this.vy = (Math.random() - 0.5) * 0.2; 
+                    this.size = Math.random() * 1.5; this.alpha = Math.random(); this.fadeDir = 0.005;
+                } else if (weatherMode === 'fire') {
+                    this.y = canvas.height + Math.random() * 50; this.vy = -0.5 - Math.random();
+                    this.vx = (Math.random() - 0.5) * 0.5; this.size = Math.random() * 2;
+                    this.color = `rgba(255, ${150 + Math.random()*50}, 50, ${Math.random() * 0.4})`;
+                }
+            }
+            update() {
+                if (weatherMode === 'rain') { this.y += this.vy; if (this.y > canvas.height) this.y = -20; } 
+                else if (weatherMode === 'night') {
+                    this.x += this.vx; this.y += this.vy; this.alpha += this.fadeDir;
+                    if (this.alpha > 1 || this.alpha < 0) this.fadeDir *= -1;
+                } else if (weatherMode === 'fire') { this.y += this.vy; this.x += this.vx; if (this.y < 0) this.reset(); }
+            }
+            draw() {
+                if (weatherMode === 'rain') { ctx.strokeStyle = this.color; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(this.x, this.y); ctx.lineTo(this.x, this.y + this.len); ctx.stroke(); } 
+                else if (weatherMode === 'night') { ctx.fillStyle = `rgba(255, 255, 200, ${this.alpha})`; ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI*2); ctx.fill(); } 
+                else if (weatherMode === 'fire') { ctx.fillStyle = this.color; ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI*2); ctx.fill(); }
+            }
+        }
+        function setWeather(mode) { weatherMode = mode; particles = []; let count = (mode === 'rain') ? 80 : (mode === 'night' ? 50 : (mode === 'fire' ? 40 : 0)); for(let i=0; i<count; i++) particles.push(new Particle()); }
+        function animateParticles() { ctx.clearRect(0, 0, canvas.width, canvas.height); particles.forEach(p => { p.update(); p.draw(); }); requestAnimationFrame(animateParticles); }
+        animateParticles();
+
+        function switchScene(mode) {
+            tryInitAudio();
+            document.querySelectorAll('.scene-btn').forEach(b => b.classList.remove('active'));
+            event.currentTarget.classList.add('active');
+            
+            // 样式重置
+            document.body.className = ''; 
+            if(mode !== 'sunny') document.body.classList.add(`scene-${mode}`);
+            
+            // 粒子重置
+            setWeather(mode === 'sunny' ? 'none' : mode);
+            
+            // 声音重置
+            if (mode === 'rain') Ambience.rain();
+            else if (mode === 'night') Ambience.wind();
+            else if (mode === 'fire') Ambience.fire();
+            else Ambience.stop();
+        }
+
+        // --- 6. 物理引擎 (Matter.js - 保持 star-jar.html) ---
+        const Engine = Matter.Engine, Render = Matter.Render, Runner = Matter.Runner, Bodies = Matter.Bodies, Composite = Matter.Composite, Mouse = Matter.Mouse, MouseConstraint = Matter.MouseConstraint, Events = Matter.Events, Body = Matter.Body, Query = Matter.Query;
+        const engine = Engine.create(); const world = engine.world;
+        const container = document.getElementById('physics-canvas');
+        const render = Render.create({ element: container, engine: engine, options: { width: window.innerWidth, height: window.innerHeight, background: 'transparent', wireframes: false } });
+
+        let w = window.innerWidth; let h = window.innerHeight;
+        const jarW = 340; const jarH = 480; let jarX = w / 2; let jarY = h - 60 - (jarH/2);
+
+        const wallOpts = { isStatic: true, render: { visible: false } };
+        const jarBottom = Bodies.rectangle(jarX, jarY + jarH/2 - 5, jarW - 25, 20, wallOpts);
+        const jarLeft = Bodies.rectangle(jarX - jarW/2 + 5, jarY, 20, jarH - 10, wallOpts);
+        const jarRight = Bodies.rectangle(jarX + jarW/2 - 5, jarY, 20, jarH - 10, wallOpts);
+        Composite.add(world, [jarBottom, jarLeft, jarRight]);
+
+        const screenOpts = { isStatic: true, render: { visible: false }, label: 'screenWall' };
+        const screenLeft = Bodies.rectangle(0 - 50, h/2, 100, h * 2, screenOpts);
+        const screenRight = Bodies.rectangle(w + 50, h/2, 100, h * 2, screenOpts);
+        const screenTop = Bodies.rectangle(w/2, -100, w * 2, 100, screenOpts);
+        const screenFloor = Bodies.rectangle(w/2, h + 50, w * 2, 100, screenOpts);
+        let screenWalls = [screenLeft, screenRight, screenTop, screenFloor];
+        Composite.add(world, screenWalls);
+
+        const mouse = Mouse.create(render.canvas);
+        const mouseConstraint = MouseConstraint.create(engine, { mouse: mouse, constraint: { stiffness: 0.2, render: { visible: false } } });
+        Composite.add(world, mouseConstraint); render.mouse = mouse;
+        Render.run(render); const runner = Runner.create(); Runner.run(runner, engine);
+
+        // 物理摩擦声监听
+        Events.on(engine, 'beforeUpdate', function() {
+            if (!noiseGain) return;
+            let totalKineticEnergy = 0;
+            const bodies = Composite.allBodies(world);
+            bodies.forEach(body => { if (!body.isStatic && body.label === 'star') { totalKineticEnergy += body.speed; } });
+            let targetVolume = Math.min(totalKineticEnergy * 0.005, 0.15); // 限制最大摩擦音量
+            if (noiseGain.gain.value > 0.16) return;
+            const currentVol = noiseGain.gain.value;
+            noiseGain.gain.value = currentVol + (targetVolume - currentVol) * 0.1;
+        });
+
+        function getCssVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+        let deleteMode = false; let selectedColorVar = '--c-pink'; 
+        const jarVisual = document.getElementById('jarVisual');
+
+        function toggleDeleteMode() {
+            tryInitAudio(); SoundFX.page();
+            deleteMode = !deleteMode; const btn = document.getElementById('btnDelete'); const txt = document.getElementById('delText');
+            if (deleteMode) {
+                Composite.remove(world, screenWalls); document.body.classList.add('delete-mode');
+                btn.classList.add('active-delete'); txt.innerText = "丢弃: 开"; startCleanupLoop();
+            } else {
+                Composite.add(world, screenWalls); document.body.classList.remove('delete-mode');
+                btn.classList.remove('active-delete'); txt.innerText = "丢弃: 关";
+            }
+        }
+
+        function shakeJarWithAnim() {
+            tryInitAudio();
+            const bodies = Composite.allBodies(world);
+            bodies.forEach(body => { if (!body.isStatic) { Body.applyForce(body, body.position, { x: (Math.random() - 0.5) * 0.08, y: -0.06 - Math.random() * 0.06 }); } });
+            jarVisual.classList.remove('jar-shaking'); void jarVisual.offsetWidth; jarVisual.classList.add('jar-shaking');
+        }
+
+        function startCleanupLoop() {
+            if (!deleteMode) return;
+            const bodies = Composite.allBodies(world); const toRemove = [];
+            bodies.forEach(body => { if (!body.isStatic) { if (body.position.x < -100 || body.position.x > w + 100 || body.position.y > h + 100) toRemove.push(body); } });
+            if (toRemove.length > 0) { Composite.remove(world, toRemove); saveData(); }
+            requestAnimationFrame(startCleanupLoop);
+        }
+
+        let mouseDownPos = { x: 0, y: 0 };
+        function handleInteraction(e) { tryInitAudio(); mouseDownPos = { x: e.clientX || e.touches[0].clientX, y: e.clientY || e.touches[0].clientY }; }
+        container.addEventListener('mousedown', handleInteraction); container.addEventListener('touchstart', handleInteraction);
+        container.addEventListener('click', (e) => {
+            const dx = Math.abs(e.clientX - mouseDownPos.x); const dy = Math.abs(e.clientY - mouseDownPos.y);
+            if (dx < 5 && dy < 5) {
+                const bodies = Composite.allBodies(world).filter(b => b.label === 'star'); 
+                const clickedBody = Query.point(bodies, { x: e.clientX, y: e.clientY })[0];
+                if (clickedBody && clickedBody.plugin && clickedBody.plugin.text) showRead(clickedBody.plugin);
+            }
+        });
+
+        function spawnStar(x, y, text, date, colorHex) {
+            const size = 18 + Math.random() * 10;
+            const star = Bodies.polygon(x, y, 5, size, { restitution: 0.4, friction: 0.5, label: 'star', render: { fillStyle: colorHex, strokeStyle: '#5a4a42', lineWidth: 2 }, plugin: { text, date, color: colorHex } });
+            Matter.Body.setAngularVelocity(star, Math.random() * 0.4 - 0.2); Composite.add(world, star);
+        }
+
+        // 修复：打开输入弹窗后自动聚焦输入框
+        function openWriter() { 
+            tryInitAudio(); 
+            SoundFX.page(); 
+            const modal = document.getElementById('writeModal');
+            modal.classList.add('active');
+            // 打开弹窗后自动聚焦输入框，避免用户点击时的冲突
+            setTimeout(() => {
+                document.getElementById('moodText').focus();
+            }, 100);
+        }
+        function closeWriter() { SoundFX.page(); document.getElementById('writeModal').classList.remove('active'); }
+        function setColor(varName) { selectedColorVar = varName; document.querySelectorAll('.c-dot').forEach(d => d.classList.remove('active')); event.target.classList.add('active'); }
+        function submitStar() {
+            const text = document.getElementById('moodText').value; if(!text) return; 
+            SoundFX.page(); closeWriter(); setTimeout(() => SoundFX.drop(), 600);
+            const dropX = jarX + (Math.random() * 40 - 20); const dropY = jarY - jarH/2 - 30; const date = new Date().toLocaleDateString();
+            const actualColor = getCssVar(selectedColorVar.replace('var(', '').replace(')', ''));
+            spawnStar(dropX, dropY, text, date, actualColor); saveData(); document.getElementById('moodText').value = '';
+        }
+        function showRead(data) {
+            SoundFX.page(); const m = document.getElementById('readModal'); document.getElementById('rDate').innerText = data.date; document.getElementById('rText').innerText = data.text;
+            document.querySelector('.note-card').style.backgroundColor = data.color; m.classList.add('active');
+        }
+        function closeRead() { SoundFX.page(); document.getElementById('readModal').classList.remove('active'); }
+
+        function startEditTag() { document.getElementById('tagContainer').classList.add('editing'); }
+        function endEditTag(el) { document.getElementById('tagContainer').classList.remove('editing'); localStorage.setItem('jar_tag_text', el.innerText); }
+        function showStats() {
+            SoundFX.page();
+            const stars = Composite.allBodies(world).filter(b => b.label === 'star');
+            const total = stars.length;
+            const list = document.getElementById('statsList');
+            if(total === 0) { list.innerHTML = '<div style="color:#999; margin:20px 0; font-family: var(--font-cute);">罐子还是空的哦 ~</div>'; } else {
+                const moodMap = {}; moodMap[getCssVar('--c-pink')] = '开心'; moodMap[getCssVar('--c-orange')] = '治愈'; moodMap[getCssVar('--c-green')] = '平静'; moodMap[getCssVar('--c-blue')] = '忧郁'; moodMap[getCssVar('--c-purple')] = '愿望';
+                const counts = {}; stars.forEach(s => { const c = s.plugin.color; counts[c] = (counts[c] || 0) + 1; });
+                let html = '';
+                for (const hex in moodMap) {
+                    const count = counts[hex] || 0; if (count > 0) { const percent = Math.round((count / total) * 100); html += `<div class="stats-row"><div style="display:flex; align-items:center;"><div class="stats-dot" style="background:${hex}"></div><span>${moodMap[hex]}</span></div><span style="font-weight:bold;">${percent}%</span></div>`; }
+                }
+                list.innerHTML = html;
+            }
+            document.getElementById('statsModal').classList.add('active');
+        }
+        function closeStats() { SoundFX.page(); document.getElementById('statsModal').classList.remove('active'); }
+
+        // ===== 新增：设置功能相关函数 =====
+        function openSettings() { 
+            SoundFX.page();
+            document.getElementById('settingsModal').classList.add('active'); 
+        }
+        function closeSettings(e) { 
+            if(e && e.target !== document.getElementById('settingsModal')) return;
+            SoundFX.page();
+            document.getElementById('settingsModal').classList.remove('active'); 
+        }
+        function downloadData() {
+            const data = localStorage.getItem(KEY);
+            if(!data) {
+                alert('还没有星星数据可以备份哦～');
+                return;
+            }
+            const blob = new Blob([data], {type: 'application/json'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a'); 
+            a.href = url; 
+            a.download = `star-jar-backup-${new Date().toLocaleDateString().replace(/\//g, '-')}.json`;
+            a.click(); 
+            URL.revokeObjectURL(url);
+        }
+        function loadFromFile(input) {
+            const file = input.files[0];
+            if(!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    // 验证数据格式
+                    if(Array.isArray(data) && (data.length === 0 || (data[0] && data[0].t && data[0].d && data[0].c))) {
+                        localStorage.setItem(KEY, JSON.stringify(data));
+                        alert('回忆恢复成功！页面将刷新～');
+                        location.reload();
+                    } else {
+                        alert('备份文件格式不正确，无法恢复 😢');
+                    }
+                } catch(err) { 
+                    alert('文件格式好像不对哦，试试重新备份？'); 
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function saveData() { const stars = Composite.allBodies(world).filter(b => b.plugin && b.plugin.text); const data = stars.map(b => ({ x: b.position.x, y: b.position.y, angle: b.angle, c: b.plugin.color, t: b.plugin.text, d: b.plugin.date })); localStorage.setItem(KEY, JSON.stringify(data)); }
+        function loadData() { 
+            const raw = localStorage.getItem(KEY); if (raw) JSON.parse(raw).forEach(d => spawnStar(d.x, d.y, d.t, d.d, d.c)); 
+            const tagText = localStorage.getItem('jar_tag_text');
+            if(tagText) document.querySelector('.tag-paper').innerText = tagText;
+        }
+
+        // 修复：适配窗口resize，不再直接刷新页面
+        window.addEventListener('resize', () => {
+            resizeCanvas(); // 粒子画布适配
+            // Matter.js 渲染画布适配
+            render.canvas.width = window.innerWidth;
+            render.canvas.height = window.innerHeight;
+            // 更新物理世界的边界
+            w = window.innerWidth;
+            h = window.innerHeight;
+            jarX = w / 2;
+            jarY = h - 60 - (jarH/2);
+            // 更新罐子物理边界位置
+            Matter.Body.setPosition(jarBottom, { x: jarX, y: jarY + jarH/2 - 5 });
+            Matter.Body.setPosition(jarLeft, { x: jarX - jarW/2 + 5, y: jarY });
+            Matter.Body.setPosition(jarRight, { x: jarX + jarW/2 - 5, y: jarY });
+            // 更新屏幕边界
+            Matter.Body.setPosition(screenLeft, { x: 0 - 50, y: h/2 });
+            Matter.Body.setPosition(screenRight, { x: w + 50, y: h/2 });
+            Matter.Body.setPosition(screenTop, { x: w/2, y: -100 });
+            Matter.Body.setPosition(screenFloor, { x: w/2, y: h + 50 });
+        });
+
+        setTimeout(loadData, 100);
+    </script>
+</body>
+</html>
